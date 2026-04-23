@@ -4,9 +4,19 @@ import (
 	"bufio"
 	"log"
 	"net"
+	"payment-switch-simulator/internal/async"
 	"payment-switch-simulator/internal/handler"
+	"payment-switch-simulator/internal/resilience"
 	"time"
 )
+
+var limiter = resilience.NewRateLimiter(10, 5, time.Second)
+
+var globalQueue *async.Queue
+
+func SetQueue(q *async.Queue) {
+	globalQueue = q
+}
 
 type TCPServer struct {
 	addr string
@@ -45,7 +55,13 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 
-		response := handler.HandleMessage(msg)
+		// 🔥 rate limiting
+		if !limiter.Allow() {
+			conn.Write([]byte(`{"error":"rate limit exceeded"}` + "\n"))
+			continue
+		}
+
+		response := handler.HandleMessage(msg, globalQueue)
 		conn.Write([]byte(response + "\n"))
 	}
 }
