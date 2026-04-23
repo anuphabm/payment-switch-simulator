@@ -1,0 +1,1 @@
+Client → TCP → Parser → Processor → Store → Response
